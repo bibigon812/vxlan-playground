@@ -1,0 +1,23 @@
+- hosts: all
+  become: true
+  tasks:
+    - name: add frr apt key
+      apt_key:
+        url: https://deb.frrouting.org/frr/keys.asc
+        state: present
+
+    - name: add frr repositroy
+      apt_repository:
+        filename: frr
+        repo: "deb https://deb.frrouting.org/frr {{ ansible_distribution_release }} frr-stable"
+        state: present
+
+    - name: apt update cache
+      apt:
+        update_cache: true
+
+    - name: install frr
+      apt:
+        name:
+          - frr
+          - frr-pythontools
