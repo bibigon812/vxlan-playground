@@ -7,6 +7,10 @@
         state: restarted
 
   tasks:
+    - name: set self_ip
+      set_fact:
+        self_ip: "{{ ansible_all_ipv4_addresses | ipaddr('10.255.255.0/24') |first }}"
+
     - name: add frr apt key
       apt_key:
         url: https://deb.frrouting.org/frr/keys.asc
@@ -27,6 +31,11 @@
         name:
           - frr
           - frr-pythontools
+
+    - name: install bridge-utils
+      apt:
+        name: bridge-utils
+        state: present
 
     - name: ensure frr service is started
       service:
@@ -49,7 +58,7 @@
       shell: |
         vtysh -c 'configure terminal
           router bgp 65000
-            bgp router-id {{ ansible_all_ipv4_addresses | ipaddr('10.255.255.0/24') |first }}
+            bgp router-id {{ self_ip }}
             no bgp default ipv4-unicast
             neighbor fabric peer-group
             neighbor fabric remote-as 65000
@@ -63,3 +72,12 @@
             exit-address-family
             end
         write memory'
+
+    - name: create vxlan100
+      shell: |
+        ip link add vxlan100 type vxlan id 100 dstport 4789 local {{ self_ip }} nolearning
+        brctl addbr br100
+        brctl addif br100 vxlan100
+        brctl stp br100 off
+        ip link set up dev br100
+        ip link set up dev vxlan100
