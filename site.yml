@@ -6,10 +6,18 @@
         name: frr
         state: restarted
 
+    - name: add ip address on br100
+      shell: ip addr add {{ br100_ip }} dev br100
+
   tasks:
-    - name: set self_ip
+    - name: set ips
       set_fact:
         self_ip: "{{ ansible_all_ipv4_addresses | ipaddr('10.255.255.0/24') |first }}"
+        br100_ip: "{{ br100_ips[inventory_hostname] }}"
+      vars:
+        br100_ips:
+          vxlan-1: 172.16.0.1/24
+          vxlan-2: 172.16.0.2/24
 
     - name: add frr apt key
       apt_key:
@@ -81,3 +89,10 @@
         brctl stp br100 off
         ip link set up dev br100
         ip link set up dev vxlan100
+
+    - name: get ip address on br100
+      shell: "ip addr list dev br100 | grep -F {{ br100_ip }}"
+      register: ip_output
+      changed_when: ip_output.stdout == ''
+      failed_when: false
+      notify: add ip address on br100
