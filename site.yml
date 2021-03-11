@@ -1,5 +1,11 @@
 - hosts: all
   become: true
+  handlers:
+    - name: restart frr
+      service:
+        name: frr
+        state: restarted
+
   tasks:
     - name: add frr apt key
       apt_key:
@@ -21,3 +27,39 @@
         name:
           - frr
           - frr-pythontools
+
+    - name: ensure frr service is started
+      service:
+        name: frr
+        enabled: true
+        state: started
+
+    - name: enable bgpd
+      lineinfile:
+        path: /etc/frr/daemons
+        regexp: '^bgpd='
+        line: bgpd=yes
+      notify:
+        restart frr
+
+    - name: flush handlers
+      meta: flush_handlers
+
+    - name: add evpn config
+      shell: |
+        vtysh -c 'configure terminal
+          router bgp 65000
+            bgp router-id {{ ansible_all_ipv4_addresses | ipaddr('10.255.255.0/24') |first }}
+            no bgp default ipv4-unicast
+            neighbor fabric peer-group
+            neighbor fabric remote-as 65000
+            neighbor fabric capability extended-nexthop
+            {% for ipaddress in ['10.255.255.101', '10.255.255.102'] | difference(ansible_all_ipv4_addresses | ipaddr('10.255.255.0/24')) %}
+            neighbor {{ ipaddress }} peer-group fabric
+            {% endfor %}
+            address-family l2vpn evpn
+              neighbor fabric activate
+              advertise-all-vni
+            exit-address-family
+            end
+        write memory'
